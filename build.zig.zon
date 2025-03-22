@@ -1,0 +1,21 @@
+.{
+    .name = "zig-device-query",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.14.0",
+    
+    .dependencies = .{
+        // Reference to the X11 library dependency
+        .x11 = .{
+            .url = "https://github.com/foxnne/zig-x11/archive/refs/tags/0.1.1.tar.gz",
+            .hash = "12200257af3ef73b5f372d5af8fba24d2a1c92ada456389e5f94ecbaaa90c88e0cb0",
+        },
+    },
+    
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
