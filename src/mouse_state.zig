@@ -30,7 +30,7 @@ pub const MouseState = struct {
     pub fn init(allocator: Allocator) !MouseState {
         // Support up to 5 mouse buttons by default
         const buttons = try allocator.alloc(bool, 6);
-        std.mem.set(bool, buttons, false);
+        @memset(buttons, false);
         
         return MouseState{
             .coords = MousePosition.init(0, 0),

@@ -46,15 +46,20 @@ const CallbackEntry = struct {
     active: bool,
 };
 
+// Type definitions for callbacks
+const KeyEntryCallback = struct { entry: CallbackEntry, callback: KeyCallback };
+const MouseMoveEntryCallback = struct { entry: CallbackEntry, callback: MouseMoveCallback };
+const MouseButtonEntryCallback = struct { entry: CallbackEntry, callback: MouseButtonCallback };
+
 /// Storage for keyboard callbacks
 const KeyboardCallbacks = struct {
-    key_down: std.ArrayList(struct { entry: CallbackEntry, callback: KeyCallback }),
-    key_up: std.ArrayList(struct { entry: CallbackEntry, callback: KeyCallback }),
+    key_down: std.ArrayList(KeyEntryCallback),
+    key_up: std.ArrayList(KeyEntryCallback),
     
     pub fn init(allocator: Allocator) KeyboardCallbacks {
         return .{
-            .key_down = std.ArrayList(struct { entry: CallbackEntry, callback: KeyCallback }).init(allocator),
-            .key_up = std.ArrayList(struct { entry: CallbackEntry, callback: KeyCallback }).init(allocator),
+            .key_down = std.ArrayList(KeyEntryCallback).init(allocator),
+            .key_up = std.ArrayList(KeyEntryCallback).init(allocator),
         };
     }
     
@@ -66,15 +71,15 @@ const KeyboardCallbacks = struct {
 
 /// Storage for mouse callbacks
 const MouseCallbacks = struct {
-    move: std.ArrayList(struct { entry: CallbackEntry, callback: MouseMoveCallback }),
-    button_down: std.ArrayList(struct { entry: CallbackEntry, callback: MouseButtonCallback }),
-    button_up: std.ArrayList(struct { entry: CallbackEntry, callback: MouseButtonCallback }),
+    move: std.ArrayList(MouseMoveEntryCallback),
+    button_down: std.ArrayList(MouseButtonEntryCallback),
+    button_up: std.ArrayList(MouseButtonEntryCallback),
     
     pub fn init(allocator: Allocator) MouseCallbacks {
         return .{
-            .move = std.ArrayList(struct { entry: CallbackEntry, callback: MouseMoveCallback }).init(allocator),
-            .button_down = std.ArrayList(struct { entry: CallbackEntry, callback: MouseButtonCallback }).init(allocator),
-            .button_up = std.ArrayList(struct { entry: CallbackEntry, callback: MouseButtonCallback }).init(allocator),
+            .move = std.ArrayList(MouseMoveEntryCallback).init(allocator),
+            .button_down = std.ArrayList(MouseButtonEntryCallback).init(allocator),
+            .button_up = std.ArrayList(MouseButtonEntryCallback).init(allocator),
         };
     }
     
@@ -102,14 +107,19 @@ pub const DeviceEventsHandler = struct {
     
     /// Initialize a new DeviceEventsHandler with the given polling interval
     pub fn init(allocator: Allocator, polling_interval_ns: u64) !*DeviceEventsHandler {
-        var self = try allocator.create(DeviceEventsHandler);
+        const self = try allocator.create(DeviceEventsHandler);
         errdefer allocator.destroy(self);
         
-        var device_state_ptr = try allocator.create(DeviceState);
+        // Create the device state pointer
+        const device_state_ptr = try allocator.create(DeviceState);
         errdefer allocator.destroy(device_state_ptr);
         
+        // Initialize the device state
         device_state_ptr.* = try DeviceState.init(allocator);
         errdefer device_state_ptr.deinit();
+        
+        // Debug print to verify device state initialization
+        std.debug.print("Device state initialized successfully\n", .{});
         
         self.* = .{
             .allocator = allocator,
@@ -179,7 +189,7 @@ pub const DeviceEventsHandler = struct {
         
         try self.keyboard_callbacks.key_down.append(.{ .entry = entry, .callback = callback });
         
-        var guard = try self.allocator.create(CallbackGuard);
+        const guard = try self.allocator.create(CallbackGuard);
         guard.* = .{
             .id = id,
             .callback_type = .KeyDown,
@@ -200,7 +210,7 @@ pub const DeviceEventsHandler = struct {
         
         try self.keyboard_callbacks.key_up.append(.{ .entry = entry, .callback = callback });
         
-        var guard = try self.allocator.create(CallbackGuard);
+        const guard = try self.allocator.create(CallbackGuard);
         guard.* = .{
             .id = id,
             .callback_type = .KeyUp,
@@ -221,7 +231,7 @@ pub const DeviceEventsHandler = struct {
         
         try self.mouse_callbacks.move.append(.{ .entry = entry, .callback = callback });
         
-        var guard = try self.allocator.create(CallbackGuard);
+        const guard = try self.allocator.create(CallbackGuard);
         guard.* = .{
             .id = id,
             .callback_type = .MouseMove,
@@ -242,7 +252,7 @@ pub const DeviceEventsHandler = struct {
         
         try self.mouse_callbacks.button_down.append(.{ .entry = entry, .callback = callback });
         
-        var guard = try self.allocator.create(CallbackGuard);
+        const guard = try self.allocator.create(CallbackGuard);
         guard.* = .{
             .id = id,
             .callback_type = .MouseButtonDown,
@@ -263,7 +273,7 @@ pub const DeviceEventsHandler = struct {
         
         try self.mouse_callbacks.button_up.append(.{ .entry = entry, .callback = callback });
         
-        var guard = try self.allocator.create(CallbackGuard);
+        const guard = try self.allocator.create(CallbackGuard);
         guard.* = .{
             .id = id,
             .callback_type = .MouseButtonUp,
@@ -335,6 +345,8 @@ pub const DeviceEventsHandler = struct {
 
 /// The keyboard thread function
 fn keyboardThreadFn(events_handler: *DeviceEventsHandler) void {
+    std.debug.print("Keyboard thread started\n", .{});
+    
     var prev_keys = std.ArrayList(Keycode).init(events_handler.allocator);
     defer prev_keys.deinit();
     
@@ -397,19 +409,27 @@ fn keyboardThreadFn(events_handler: *DeviceEventsHandler) void {
         
         time.sleep(events_handler.sleep_duration);
     }
+    
+    std.debug.print("Keyboard thread exited\n", .{});
 }
 
 /// The mouse thread function
 fn mouseThreadFn(events_handler: *DeviceEventsHandler) void {
+    std.debug.print("Mouse thread started\n", .{});
+    
+    std.debug.print("Device state pointer: {*}\n", .{events_handler.device_state});
+    
     var prev_mouse = events_handler.device_state.getMouse() catch |err| {
-        std.debug.print("Error getting mouse state: {}\n", .{err});
+        std.debug.print("Error getting initial mouse state: {}\n", .{err});
         return;
     };
     defer prev_mouse.deinit();
     
+    std.debug.print("Initial mouse state acquired successfully\n", .{});
+    
     while (events_handler.running) {
         var current_mouse = events_handler.device_state.getMouse() catch |err| {
-            std.debug.print("Error getting mouse state: {}\n", .{err});
+            std.debug.print("Error getting current mouse state: {}\n", .{err});
             time.sleep(events_handler.sleep_duration);
             continue;
         };
@@ -457,9 +477,11 @@ fn mouseThreadFn(events_handler: *DeviceEventsHandler) void {
         
         time.sleep(events_handler.sleep_duration);
     }
+    
+    std.debug.print("Mouse thread exited\n", .{});
 }
 
 /// Clean up callback lists by removing inactive callbacks
-fn cleanupCallbackLists(events_handler: *DeviceEventsHandler) void {
+fn cleanupCallbackLists(_: *DeviceEventsHandler) void {
     // Not implemented in this simplified version
 }

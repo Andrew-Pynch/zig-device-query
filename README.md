@@ -35,7 +35,7 @@ Add the dependency to your `build.zig.zon`:
 ```zig
 .dependencies = .{
     .zig_device_query = .{
-        .url = "https://github.com/yourusername/zig-device-query/archive/refs/tags/v0.1.0.tar.gz",
+        .url = "https://github.com/Andrew-Pynch/zig-device-query/archive/refs/tags/v0.1.0.tar.gz",
         .hash = "<hash>",
     },
 },
@@ -80,18 +80,18 @@ pub fn main() !void {
     // Get mouse state
     var mouse = try device_state.getMouse();
     defer mouse.deinit();
-    
+
     std.debug.print("Mouse position: ({}, {})\n", .{mouse.coords.x, mouse.coords.y});
-    
+
     // Check if a specific button is pressed
     if (mouse.isButtonPressed(1)) {
         std.debug.print("Left mouse button is pressed\n", .{});
     }
-    
+
     // Get keyboard state
     const keys = try device_state.getKeys();
     defer allocator.free(keys);
-    
+
     // Check if a specific key is pressed
     for (keys) |key| {
         if (key == Keycode.A) {
@@ -117,15 +117,15 @@ pub fn main() !void {
     // Create an event handler with a 10ms polling interval
     var events_handler = try DeviceEventsHandler.init(allocator, 10 * time.ns_per_ms);
     defer events_handler.deinit();
-    
+
     // Register callback for key presses
     const key_guard = try events_handler.onKeyDown(keyCallback);
     defer allocator.destroy(key_guard);
-    
+
     // Register callback for mouse movement
     const mouse_guard = try events_handler.onMouseMove(mouseMoveCallback);
     defer allocator.destroy(mouse_guard);
-    
+
     // Keep the program running to receive events
     std.debug.print("Press keys or move the mouse...\n", .{});
     time.sleep(10 * time.ns_per_s);

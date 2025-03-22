@@ -395,7 +395,7 @@ fn keyUpCallback(key: Keycode) void {
 
 fn mouseMoveCallback(position: *const device_query.MousePosition) void {
     // Only print some positions to avoid flooding the terminal
-    if (position.x % 100 == 0 or position.y % 100 == 0) {
+    if (@rem(position.x, 100) == 0 or @rem(position.y, 100) == 0) {
         std.debug.print("Mouse moved: ({:4}, {:4})          \n", .{position.x, position.y});
     }
 }

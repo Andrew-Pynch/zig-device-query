@@ -5,17 +5,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Add X11 library for Linux
-    const x11_dep = if (target.result.os.tag == .linux) 
-        b.dependency("x11", .{
-            .target = target,
-            .optimize = optimize,
-        })
-    else
-        null;
-
-    // Create the library module
-    const lib_mod = b.addModule("zig_device_query_lib", .{
+    // Create the module
+    const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -51,7 +42,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // Add the library module to the executable
-    exe.addModule("zig_device_query_lib", lib_mod);
+    exe.root_module.addImport("zig_device_query_lib", lib_mod);
 
     // Add X11 dependency for Linux
     if (target.result.os.tag == .linux) {

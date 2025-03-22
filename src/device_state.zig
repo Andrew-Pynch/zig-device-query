@@ -49,8 +49,17 @@ const LinuxDeviceState = struct {
 
     /// Initialize a new DeviceState for Linux
     pub fn init(allocator: Allocator) !LinuxDeviceState {
-        const display = x11.XOpenDisplay(null) orelse return error.FailedToOpenDisplay;
+        std.debug.print("LinuxDeviceState.init() called\n", .{});
+        
+        const display = x11.XOpenDisplay(null) orelse {
+            std.debug.print("XOpenDisplay failed\n", .{});
+            return error.FailedToOpenDisplay;
+        };
+        
+        std.debug.print("XOpenDisplay succeeded: {*}\n", .{display});
+        
         const root_window = x11.XDefaultRootWindow(display);
+        std.debug.print("Root window: {}\n", .{root_window});
         
         return LinuxDeviceState{
             .allocator = allocator,
@@ -62,7 +71,7 @@ const LinuxDeviceState = struct {
     /// Free allocated resources
     pub fn deinit(self: *LinuxDeviceState) void {
         if (self.display) |display| {
-            x11.XCloseDisplay(@ptrCast(display));
+            _ = x11.XCloseDisplay(@ptrCast(display));
             self.display = null;
         }
     }
@@ -77,7 +86,11 @@ const LinuxDeviceState = struct {
         var win_y: c_int = undefined;
         var mask_return: c_uint = undefined;
         
+        std.debug.print("LinuxDeviceState.getMouse() called, self={*}\n", .{self});
+        
         if (self.display) |display| {
+            std.debug.print("Display pointer: {*}, root_window: {}\n", .{display, self.root_window});
+            
             const result = x11.XQueryPointer(
                 @ptrCast(display),
                 self.root_window,
@@ -91,8 +104,11 @@ const LinuxDeviceState = struct {
             );
             
             if (result == 0) {
+                std.debug.print("XQueryPointer failed\n", .{});
                 return error.QueryPointerFailed;
             }
+            
+            std.debug.print("XQueryPointer succeeded, coords=({}, {})\n", .{win_x, win_y});
             
             var mouse = try MouseState.init(self.allocator);
             mouse.setCoords(win_x, win_y);
@@ -107,6 +123,7 @@ const LinuxDeviceState = struct {
             return mouse;
         }
         
+        std.debug.print("Display is null!\n", .{});
         return error.DisplayNotInitialized;
     }
 
@@ -169,8 +186,8 @@ const LinuxDeviceState = struct {
             65 => Keycode.Space,
             37 => Keycode.LControl,
             105 => Keycode.RControl,
-            50 => Keycode.LShift,
-            62 => Keycode.RShift,
+            112 => Keycode.LShift, // Changed from 50 which conflicts with M
+            117 => Keycode.RShift, // Changed from 62 which conflicts with Y
             64 => Keycode.LAlt,
             108 => Keycode.RAlt,
             36 => Keycode.Enter,
