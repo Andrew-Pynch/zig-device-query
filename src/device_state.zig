@@ -19,7 +19,7 @@ pub const DeviceState = switch (os_tag) {
 /// Implementation of DeviceState for Linux using X11
 const LinuxDeviceState = struct {
     allocator: Allocator,
-    display: ?*anyopaque, // X11 Display pointer
+    display: ?*x11.c.Display, // X11 Display pointer - using concrete type
     root_window: c_ulong, // Root window ID
 
     const x11 = struct {
@@ -51,13 +51,40 @@ const LinuxDeviceState = struct {
     pub fn init(allocator: Allocator) !LinuxDeviceState {
         std.debug.print("LinuxDeviceState.init() called\n", .{});
         
-        const display = x11.XOpenDisplay(null) orelse {
-            std.debug.print("XOpenDisplay failed\n", .{});
-            return error.FailedToOpenDisplay;
+        // Try an extremely cautious approach
+        std.debug.print("Initializing X11 connection\n", .{});
+        
+        // Try using an explicit display value
+        const display_str = ":1";
+        std.debug.print("Trying to connect to display: {s}\n", .{display_str});
+        
+        // Attempt to open the X display with an explicit display name
+        const display = blk: {
+            // Create a null-terminated C string for the display name
+            var buffer: [64]u8 = undefined;
+            const len = @min(display_str.len, buffer.len - 1);
+            @memcpy(buffer[0..len], display_str[0..len]);
+            buffer[len] = 0; // Null terminate
+            
+            std.debug.print("Calling XOpenDisplay with explicit display\n", .{});
+            
+            break :blk x11.XOpenDisplay(&buffer) orelse {
+                std.debug.print("XOpenDisplay failed with explicit display\n", .{});
+                std.debug.print("Trying with null display parameter\n", .{});
+                
+                // Try with null as fallback
+                const null_display = x11.XOpenDisplay(null) orelse {
+                    std.debug.print("XOpenDisplay(null) also failed\n", .{});
+                    return error.FailedToOpenDisplay;
+                };
+                
+                break :blk null_display;
+            };
         };
         
         std.debug.print("XOpenDisplay succeeded: {*}\n", .{display});
         
+        // Use the concrete type for X11 display
         const root_window = x11.XDefaultRootWindow(display);
         std.debug.print("Root window: {}\n", .{root_window});
         
@@ -71,7 +98,7 @@ const LinuxDeviceState = struct {
     /// Free allocated resources
     pub fn deinit(self: *LinuxDeviceState) void {
         if (self.display) |display| {
-            _ = x11.XCloseDisplay(@ptrCast(display));
+            _ = x11.XCloseDisplay(display);
             self.display = null;
         }
     }
@@ -92,7 +119,7 @@ const LinuxDeviceState = struct {
             std.debug.print("Display pointer: {*}, root_window: {}\n", .{display, self.root_window});
             
             const result = x11.XQueryPointer(
-                @ptrCast(display),
+                display,
                 self.root_window,
                 &root_return,
                 &child_return,
@@ -210,7 +237,7 @@ const LinuxDeviceState = struct {
         errdefer keys.deinit();
         
         if (self.display) |display| {
-            _ = x11.XQueryKeymap(@ptrCast(display), &keymap);
+            _ = x11.XQueryKeymap(display, &keymap);
             
             // Scan through the keymap to find pressed keys
             for (keymap, 0..) |byte, i| {

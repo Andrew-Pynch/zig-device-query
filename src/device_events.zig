@@ -110,13 +110,16 @@ pub const DeviceEventsHandler = struct {
         const self = try allocator.create(DeviceEventsHandler);
         errdefer allocator.destroy(self);
         
-        // Create the device state pointer
-        const device_state_ptr = try allocator.create(DeviceState);
-        errdefer allocator.destroy(device_state_ptr);
+        // Create and initialize the device state
+        var device_state = try DeviceState.init(allocator);
         
-        // Initialize the device state
-        device_state_ptr.* = try DeviceState.init(allocator);
-        errdefer device_state_ptr.deinit();
+        // Attempt an initial query to ensure the device state is working
+        // This can help catch initialization issues early
+        _ = try device_state.getMouse();
+        
+        // Now create a pointer to hold the device state
+        const device_state_ptr = try allocator.create(DeviceState);
+        device_state_ptr.* = device_state;
         
         // Debug print to verify device state initialization
         std.debug.print("Device state initialized successfully\n", .{});
@@ -155,9 +158,20 @@ pub const DeviceEventsHandler = struct {
     fn startEventLoop(self: *DeviceEventsHandler) !void {
         if (self.running) return;
         
+        // Validate that device_state is valid before starting threads
+        
+        // Test that we can get mouse state as a final pre-thread check
+        _ = try self.device_state.getMouse();
+        
         self.running = true;
         
+        // First spawn the keyboard thread
         self.keyboard_thread = try Thread.spawn(.{}, keyboardThreadFn, .{self});
+        
+        // Small delay between thread spawn to avoid race conditions
+        time.sleep(50 * time.ns_per_ms);
+        
+        // Then spawn the mouse thread
         self.mouse_thread = try Thread.spawn(.{}, mouseThreadFn, .{self});
     }
     
@@ -350,6 +364,10 @@ fn keyboardThreadFn(events_handler: *DeviceEventsHandler) void {
     var prev_keys = std.ArrayList(Keycode).init(events_handler.allocator);
     defer prev_keys.deinit();
     
+    // Let's add a small delay before starting to query keys
+    // This gives the device state a chance to fully initialize
+    time.sleep(100 * time.ns_per_ms);
+    
     while (events_handler.running) {
         // Get current keys
         const current_keys = events_handler.device_state.getKeys() catch |err| {
@@ -419,6 +437,11 @@ fn mouseThreadFn(events_handler: *DeviceEventsHandler) void {
     
     std.debug.print("Device state pointer: {*}\n", .{events_handler.device_state});
     
+    // Let's add a small delay before starting to query mouse state
+    // This gives the device state a chance to fully initialize
+    time.sleep(100 * time.ns_per_ms);
+    
+    // Try to get the initial mouse state, but exit gracefully if it fails
     var prev_mouse = events_handler.device_state.getMouse() catch |err| {
         std.debug.print("Error getting initial mouse state: {}\n", .{err});
         return;

@@ -192,40 +192,87 @@ fn runKeyboardStateMonitor(allocator: std.mem.Allocator) !void {
 }
 
 // Test 3: Event-based input monitor
-fn runEventBasedMonitor(allocator: std.mem.Allocator) !void {
+fn runEventBasedMonitor(_: std.mem.Allocator) !void {
     std.debug.print("=== Event-Based Input Monitor ===\n\n", .{});
-    std.debug.print("This test uses callbacks to monitor input events.\n", .{});
-    std.debug.print("Press keys, move the mouse, or click to see events.\n", .{});
-    std.debug.print("Press ESC to exit.\n\n", .{});
+    std.debug.print("This test uses a minimal X11 connection test.\n", .{});
+    std.debug.print("Attempting to connect to X11 display...\n\n", .{});
     
-    var events_handler = try DeviceEventsHandler.init(allocator, 10 * time.ns_per_ms);
-    defer events_handler.deinit();
+    // Test directly with X11 API
+    const X11 = struct {
+        const c = @cImport({
+            @cInclude("X11/Xlib.h");
+        });
+    };
     
-    // Reset global flag
-    g_should_exit = false;
+    std.debug.print("1. Creating X11 connection\n", .{});
     
-    // Keyboard callbacks
-    const key_down_guard = try events_handler.onKeyDown(keyDownCallback);
-    defer allocator.destroy(key_down_guard);
+    // Try with an explicit display
+    const display_str = ":1";
+    std.debug.print("2. Using display string: {s}\n", .{display_str});
     
-    const key_up_guard = try events_handler.onKeyUp(keyUpCallback);
-    defer allocator.destroy(key_up_guard);
+    // Create a null-terminated C string for the display name
+    var buffer: [64]u8 = undefined;
+    const len = @min(display_str.len, buffer.len - 1);
+    @memcpy(buffer[0..len], display_str[0..len]);
+    buffer[len] = 0; // Null terminate
     
-    // Mouse callbacks
-    const mouse_move_guard = try events_handler.onMouseMove(mouseMoveCallback);
-    defer allocator.destroy(mouse_move_guard);
+    std.debug.print("3. Calling XOpenDisplay\n", .{});
+    const display = X11.c.XOpenDisplay(&buffer);
     
-    const mouse_button_down_guard = try events_handler.onMouseButtonDown(mouseButtonCallback);
-    defer allocator.destroy(mouse_button_down_guard);
-    
-    const mouse_button_up_guard = try events_handler.onMouseButtonUp(mouseButtonCallback);
-    defer allocator.destroy(mouse_button_up_guard);
-    
-    // Keep running until ESC key is pressed (will set g_should_exit to true)
-    while (!g_should_exit) {
-        time.sleep(100 * time.ns_per_ms);
+    if (display == null) {
+        std.debug.print("XOpenDisplay failed!\n", .{});
+        std.debug.print("Trying XOpenDisplay(null) as fallback\n", .{});
+        
+        const null_display = X11.c.XOpenDisplay(null);
+        if (null_display == null) {
+            std.debug.print("XOpenDisplay(null) also failed!\n", .{});
+            std.debug.print("X11 connection test failed\n", .{});
+            return error.FailedToConnectToX11;
+        }
+        
+        std.debug.print("XOpenDisplay(null) succeeded: {*}\n", .{null_display});
+        _ = X11.c.XCloseDisplay(null_display);
+        return;
     }
     
+    std.debug.print("4. XOpenDisplay succeeded: {*}\n", .{display});
+    std.debug.print("5. Getting root window\n", .{});
+    
+    const root_window = X11.c.XDefaultRootWindow(display);
+    std.debug.print("6. Root window: {}\n", .{root_window});
+    
+    std.debug.print("7. Querying pointer\n", .{});
+    
+    var root_return: c_ulong = undefined;
+    var child_return: c_ulong = undefined;
+    var root_x: c_int = undefined;
+    var root_y: c_int = undefined;
+    var win_x: c_int = undefined;
+    var win_y: c_int = undefined;
+    var mask_return: c_uint = undefined;
+    
+    const result = X11.c.XQueryPointer(
+        display,
+        root_window,
+        &root_return,
+        &child_return,
+        &root_x,
+        &root_y,
+        &win_x,
+        &win_y,
+        &mask_return
+    );
+    
+    if (result == 0) {
+        std.debug.print("XQueryPointer failed\n", .{});
+    } else {
+        std.debug.print("8. Mouse position: ({}, {})\n", .{win_x, win_y});
+    }
+    
+    std.debug.print("9. Closing display\n", .{});
+    _ = X11.c.XCloseDisplay(display);
+    
+    std.debug.print("X11 connection test complete\n", .{});
     std.debug.print("\nExiting event-based monitor...\n", .{});
 }
 
